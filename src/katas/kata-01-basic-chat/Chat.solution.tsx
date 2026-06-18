@@ -1,29 +1,24 @@
 import { useState } from 'react';
-import type React from 'react';
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
-import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Alert from '@mui/material/Alert';
 import SendIcon from '@mui/icons-material/Send';
-import DeleteIcon from '@mui/icons-material/Delete';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TASK 1: Initialize the Anthropic client
+// TASK 1: Send a message to the Anthropic API
+// Initialize the client and make your first messages.create call.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // The client is created once at module scope, not inside the component.
 // Creating it inside the component would produce a new instance on every render.
 const client = new Anthropic({
-  // ANTHROPIC_API_KEY is exposed to the browser via Vite's envPrefix config.
-  // Without the VITE_ prefix (Vite's default), you must explicitly whitelist
-  // the prefix in vite.config.ts: envPrefix: ['VITE_', 'ANTHROPIC_']
   apiKey: import.meta.env.ANTHROPIC_API_KEY,
 
   // The Anthropic API blocks browser requests at the network level (CORS +
@@ -41,16 +36,8 @@ const client = new Anthropic({
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// messages and setMessages come from App (lifted state) so the conversation
-// history survives tab switches. All other state is local — it resets on
-// unmount, which is fine (loading spinner, partial stream text, etc. are
-// transient by nature).
-interface ChatProps {
-  messages: MessageParam[];
-  setMessages: React.Dispatch<React.SetStateAction<MessageParam[]>>;
-}
-
-export function Chat({ messages, setMessages }: ChatProps) {
+export function Chat() {
+  const [messages, setMessages] = useState<MessageParam[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [streamingEnabled, setStreamingEnabled] = useState(false);
@@ -59,12 +46,7 @@ export function Chat({ messages, setMessages }: ChatProps) {
   // committing an incomplete entry to the conversation history.
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  const handleNewChat = () => {
-    setMessages([]);
-    setStreamingText('');
-    setError(null);
-  };
+  const [systemPrompt, setSystemPrompt] = useState('');
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -79,10 +61,100 @@ export function Chat({ messages, setMessages }: ChatProps) {
     setLoading(true);
     setError(null);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // TASK 5: Tool use — agent loop
+    // Tools let the model take actions in the world. When the model decides to
+    // call a tool, the API returns stop_reason: 'tool_use'. Your code executes
+    // the tool, sends the result back as a tool_result turn, and calls the API
+    // again — this request/execute/respond cycle is the agent loop.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // The set_theme tool lets the model toggle the app's light/dark mode
+    // in response to a user request. It takes no input — toggling is
+    // stateless from the model's perspective (it doesn't need to know
+    // the current mode; window.toggleTheme handles that).
+    const SET_THEME_TOOL: Anthropic.Tool = {
+      name: 'set_theme',
+      description:
+        'Toggle the app color theme between light and dark mode. ' +
+        'Call this when the user asks to switch, change, or toggle the theme.',
+      input_schema: { type: 'object' as const, properties: {}, required: [] },
+    };
+
+    // Handles a completed model response: if the model called set_theme, executes
+    // the tool and sends a follow-up to get the confirmation text; otherwise
+    // commits the plain assistant text directly to the message list.
+    const handleResponse = async (
+      content: Anthropic.ContentBlock[],
+      stopReason: string | null,
+      priorMessages: MessageParam[],
+    ) => {
+      if (stopReason === 'tool_use') {
+        const toolUseBlock = content.find((b) => b.type === 'tool_use');
+        if (toolUseBlock && toolUseBlock.type === 'tool_use') {
+          window.toggleTheme?.();
+
+          const assistantToolTurn: MessageParam = { role: 'assistant', content };
+          const toolResultTurn: MessageParam = {
+            role: 'user',
+            content: [{ type: 'tool_result' as const, tool_use_id: toolUseBlock.id, content: 'Theme toggled.' }],
+          };
+          const next = [...priorMessages, assistantToolTurn, toolResultTurn];
+          setMessages(next);
+
+          const followUp = await client.messages.create({
+            model: 'claude-haiku-4-5',
+            max_tokens: 1024,
+            ...(systemPrompt.trim() && { system: systemPrompt.trim() }),
+            tools: [SET_THEME_TOOL],
+            messages: next,
+          });
+          const assistantText = followUp.content[0]?.type === 'text' ? followUp.content[0].text : '';
+          setMessages([...next, { role: 'assistant', content: assistantText }]);
+        }
+      } else {
+        const assistantText = content[0]?.type === 'text' ? content[0].text : '';
+        setMessages([...priorMessages, { role: 'assistant', content: assistantText }]);
+      }
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TASK 4: System message
+    // A system message sets persistent instructions for the model that sit
+    // outside the user/assistant turn structure. It is passed once per request
+    // via the top-level `system` field — not inside `messages`.
+    // ─────────────────────────────────────────────────────────────────────────
+
     try {
-      if (streamingEnabled) {
+      if (!streamingEnabled) {
         // ─────────────────────────────────────────────────────────────────────
-        // TASK 3: Implement streaming
+        // TASK 2: Context management
+        // The Anthropic API is stateless — it has no memory between calls.
+        // Every request must include the full conversation history in `messages`
+        // so the model can see what was said before.
+        // ─────────────────────────────────────────────────────────────────────
+
+        const response = await client.messages.create({
+          model: 'claude-haiku-4-5',
+          max_tokens: 1024,
+          ...(systemPrompt.trim() && { system: systemPrompt.trim() }),
+          tools: [SET_THEME_TOOL],
+          // The full conversation history is sent on every request — the API
+          // is stateless. Claude has no memory across calls; context comes
+          // entirely from the messages array we pass each time.
+          messages: updatedMessages,
+        });
+
+        // When stop_reason is 'tool_use' the model wants to call set_theme.
+        // We execute it, then send a tool_result turn to get the final reply.
+        await handleResponse(response.content, response.stop_reason, updatedMessages);
+        // ─────────────────────────────────────────────────────────────────────
+      } else {
+        // ─────────────────────────────────────────────────────────────────────
+        // TASK 3: Streaming
+        // Instead of waiting for the full response, messages.stream() returns
+        // chunks as they arrive via SSE. Each text_delta event fires as the
+        // model writes, letting you update the UI in real time.
         // ─────────────────────────────────────────────────────────────────────
 
         setStreamingText('');
@@ -92,6 +164,8 @@ export function Chat({ messages, setMessages }: ChatProps) {
         const stream = client.messages.stream({
           model: 'claude-haiku-4-5',
           max_tokens: 1024,
+          ...(systemPrompt.trim() && { system: systemPrompt.trim() }),
+          tools: [SET_THEME_TOOL],
           messages: updatedMessages,
         });
 
@@ -108,32 +182,8 @@ export function Chat({ messages, setMessages }: ChatProps) {
         // because the SDK has already assembled the canonical final message,
         // including metadata like stop_reason and usage tokens.
         const finalMessage = await stream.finalMessage();
-        const assistantText =
-          finalMessage.content[0].type === 'text' ? finalMessage.content[0].text : '';
-        setMessages([...updatedMessages, { role: 'assistant', content: assistantText }]);
-        // Clear the in-flight partial text now that it's committed to history.
         setStreamingText('');
-        // ─────────────────────────────────────────────────────────────────────
-      } else {
-        // ─────────────────────────────────────────────────────────────────────
-        // TASK 2: Send a message (non-streaming)
-        // ─────────────────────────────────────────────────────────────────────
-
-        const response = await client.messages.create({
-          model: 'claude-haiku-4-5',
-          max_tokens: 1024,
-          // The full conversation history is sent on every request — the API
-          // is stateless. Claude has no memory across calls; context comes
-          // entirely from the messages array we pass each time.
-          messages: updatedMessages,
-        });
-
-        // response.content is an array that can contain text blocks, tool_use
-        // blocks, or thinking blocks. For a plain chat turn it will always be
-        // a single TextBlock, but checking .type guards against edge cases
-        // (e.g. if a system prompt triggers a tool call).
-        const assistantText = response.content[0].type === 'text' ? response.content[0].text : '';
-        setMessages([...updatedMessages, { role: 'assistant', content: assistantText }]);
+        await handleResponse(finalMessage.content, finalMessage.stop_reason, updatedMessages);
         // ─────────────────────────────────────────────────────────────────────
       }
     } catch (err) {
@@ -147,99 +197,33 @@ export function Chat({ messages, setMessages }: ChatProps) {
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // TASK 4: Structured output via tool_use
-  // ─────────────────────────────────────────────────────────────────────────────
+  const renderMessageContent = (msg: MessageParam) => {
+    const blocks = typeof msg.content === 'string'
+      ? [{ type: 'text' as const, text: msg.content }]
+      : msg.content;
 
-  interface SentimentResult {
-    sentiment: 'positive' | 'negative' | 'neutral';
-    confidence: number;
-    reasoning: string;
-  }
-
-  const analyzeLastMessage = async (): Promise<SentimentResult | null> => {
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-    if (!lastUserMsg) return null;
-
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 256,
-      tools: [
-        {
-          name: 'record_sentiment',
-          // The description is what the model reads to decide how to populate
-          // the fields. Be explicit about what each call represents — vague
-          // descriptions produce inconsistent outputs.
-          description: 'Record the sentiment analysis of the given text.',
-          input_schema: {
-            // 'as const' is required because TypeScript widens the literal
-            // type 'object' to string without it, failing the SDK's type check.
-            type: 'object' as const,
-            properties: {
-              sentiment: {
-                type: 'string',
-                // enum constrains the model to one of these exact values,
-                // making downstream TypeScript narrowing safe and reliable.
-                enum: ['positive', 'negative', 'neutral'],
-                description: 'The overall sentiment',
-              },
-              confidence: {
-                type: 'number',
-                description: 'Confidence score between 0 and 1',
-              },
-              reasoning: {
-                type: 'string',
-                description: 'Brief explanation of the classification',
-              },
-            },
-            required: ['sentiment', 'confidence', 'reasoning'],
-          },
-        },
-      ],
-      // tool_choice: { type: 'tool' } forces the model to call this specific
-      // tool instead of deciding on its own. This is the key to reliable
-      // structured output — without it the model may respond in plain text.
-      tool_choice: { type: 'tool', name: 'record_sentiment' },
-      // A fresh single-turn conversation rather than the full chat history —
-      // the tool is a side-call, not part of the ongoing dialogue.
-      messages: [
-        {
-          role: 'user',
-          content: `Analyze the sentiment of this text: "${typeof lastUserMsg.content === 'string' ? lastUserMsg.content : ''}"`,
-        },
-      ],
+    return blocks.map((block, i) => {
+      if (block.type === 'text') {
+        return (
+          <Typography key={i} variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+            {block.text}
+          </Typography>
+        );
+      }
+      // All non-text block types: render type label + JSON payload.
+      const { type, ...rest } = block as unknown as { type: string; [k: string]: unknown };
+      return (
+        <Box key={i} sx={{ fontFamily: 'monospace', fontSize: 12, opacity: 0.85 }}>
+          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{type}</Typography>
+          <pre style={{ margin: 0 }}>{JSON.stringify(rest, null, 2)}</pre>
+        </Box>
+      );
     });
-
-    // response.content is an array; when tool_choice forces a tool call the
-    // first (and only) block will be a ToolUseBlock. We find it defensively
-    // in case the model returns an error text block instead.
-    const toolUse = response.content.find((block) => block.type === 'tool_use');
-    if (!toolUse || toolUse.type !== 'tool_use') return null;
-    // toolUse.input is typed as unknown by the SDK — we cast to our interface
-    // because the JSON schema above guarantees the shape.
-    return toolUse.input as SentimentResult;
-  };
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // Suppresses the TypeScript "declared but never read" error while the
-  // function is not yet wired to a UI button.
-  void analyzeLastMessage;
-
-  // MessageParam.content can be either a plain string or a ContentBlock array
-  // (e.g. when tool results are present). This helper normalises both to string
-  // for display purposes.
-  const getTextContent = (msg: MessageParam): string => {
-    if (typeof msg.content === 'string') return msg.content;
-    const textBlock = msg.content.find((b) => b.type === 'text');
-    return textBlock && 'text' in textBlock ? textBlock.text : '';
   };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 2, gap: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Button variant="outlined" startIcon={<DeleteIcon />} onClick={handleNewChat}>
-          New Chat
-        </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
         <FormControlLabel
           control={
             <Switch
@@ -250,6 +234,18 @@ export function Chat({ messages, setMessages }: ChatProps) {
           label="Streaming"
         />
       </Box>
+
+      <TextField
+        label="System prompt"
+        multiline
+        minRows={2}
+        maxRows={6}
+        size="small"
+        fullWidth
+        value={systemPrompt}
+        onChange={(e) => setSystemPrompt(e.target.value)}
+        placeholder="Optional instructions sent before every conversation…"
+      />
 
       {error && (
         <Alert severity="error" onClose={() => setError(null)}>
@@ -266,15 +262,14 @@ export function Chat({ messages, setMessages }: ChatProps) {
               p: 1.5,
               maxWidth: '70%',
               alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              bgcolor: msg.role === 'user' ? 'primary.dark' : 'grey.800',
+              bgcolor: msg.role === 'user' ? 'primary.main' : 'action.hover',
+              ...(msg.role === 'user' && { color: 'primary.contrastText' }),
             }}
           >
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ opacity: 0.7 }}>
               {msg.role}
             </Typography>
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-              {getTextContent(msg)}
-            </Typography>
+            {renderMessageContent(msg)}
           </Paper>
         ))}
         {/* streamingText is rendered as a temporary bubble that disappears once
@@ -282,7 +277,7 @@ export function Chat({ messages, setMessages }: ChatProps) {
         {streamingText && (
           <Paper
             elevation={1}
-            sx={{ p: 1.5, maxWidth: '70%', alignSelf: 'flex-start', bgcolor: 'grey.800' }}
+            sx={{ p: 1.5, maxWidth: '70%', alignSelf: 'flex-start', bgcolor: 'action.hover' }}
           >
             <Typography variant="caption" color="text.secondary">
               assistant

@@ -5,14 +5,15 @@
 By completing this kata you will learn to:
 
 - Initialize the Anthropic TypeScript SDK in a browser environment
-- Manage a stateful conversation using `MessageParam[]`
-- Send messages and receive complete responses
+- Send messages to the API and handle responses
+- Manage conversation history across a stateless API
 - Stream responses in real-time using `messages.stream()`
-- Extract structured data via the `tool_use` technique
-- Write prompt regression tests with deterministic output
+- Provide persistent model instructions via a system message
+- Give the model tools to act on the world and implement an agent loop
 
 ## Certification Domains Covered
 
+- **Domain 1**: Agentic Architecture & Orchestration
 - **Domain 4**: Prompt Engineering & Structured Output
 - **Domain 5**: Context Management & Reliability
 
@@ -26,71 +27,66 @@ By completing this kata you will learn to:
 
 Open `Chat.tsx` and complete the five tasks in order:
 
-### Task 1: Initialize the Client
+### Task 1: Send a Message to the Anthropic API
 
-Import the Anthropic SDK and create a client instance. The key points:
+Initialize the Anthropic client at module scope and make your first `messages.create` call:
 
-- The API key is exposed via `import.meta.env.ANTHROPIC_API_KEY` (Vite convention)
-- You must pass `dangerouslyAllowBrowser: true` since this runs in the browser
-- The client is created once, outside the component
+- Pass `apiKey`, `baseURL: \`${window.location.origin}/api/anthropic\``, and `dangerouslyAllowBrowser: true`
+- Call `client.messages.create()` with `model`, `max_tokens`, and `messages`
+- Extract the assistant text from `response.content[0]` and append it to state
 
-**SDK Reference**: [Client initialization](https://docs.anthropic.com/en/docs/initial-setup)
+**SDK Reference**: [Client initialization](https://docs.anthropic.com/en/docs/initial-setup) · [Messages API](https://docs.anthropic.com/en/api/messages)
 
-### Task 2: Send a Message (Non-Streaming)
+### Task 2: Context Management
 
-Implement the basic request-response flow:
+The Anthropic API is stateless — it has no memory between calls. Make multi-turn conversation work:
 
-- Call `client.messages.create()` with model, max_tokens, and the full messages array
-- The response object has a `content` array — the first element is a `TextBlock`
-- Extract `.text` from it and append to conversation history
+- Pass the full `messages` array on every request so the model has prior context
+- Append each new user and assistant turn to the local array before the next call
 
 **SDK Reference**: [Messages API](https://docs.anthropic.com/en/api/messages)
 
 ### Task 3: Streaming
 
-When the streaming toggle is on, use the streaming helper:
+Instead of waiting for the full response, stream tokens as they arrive:
 
-- `client.messages.stream()` returns a stream object
-- Listen to `stream.on('text', callback)` for incremental chunks
-- `await stream.finalMessage()` gives you the complete message when done
-- Update `streamingText` state on each chunk, then commit to `messages` at the end
+- Use `client.messages.stream()` with the same params as `messages.create`
+- Listen to `stream.on('text', callback)` to update the UI incrementally
+- Await `stream.finalMessage()` to get the canonical final message, then commit it to history
 
 **SDK Reference**: [Streaming](https://docs.anthropic.com/en/api/messages-streaming)
 
-### Task 4: Structured Output
+### Task 4: System Message
 
-Create a function that forces Claude to return structured JSON:
+Give the model persistent instructions that apply to every turn:
 
-- Define a tool with `name`, `description`, and `input_schema` (JSON Schema)
-- Use `tool_choice: { type: 'tool', name: '...' }` to force the model to call it
-- The tool never actually executes — you just read the `.input` field as structured data
-- This is the recommended pattern for reliable JSON extraction
+- Pass `system: '...'` as a top-level field alongside `messages` — not inside the array
+- The system message is invisible to users but shapes every response
+
+**SDK Reference**: [System prompts](https://docs.anthropic.com/en/docs/system-prompts)
+
+### Task 5: Tool Use — Agent Loop
+
+Let the model take actions in the world by defining a tool:
+
+- Define a `set_theme` tool with `name`, `description`, and `input_schema`
+- Pass `tools: [SET_THEME_TOOL]` in every API call
+- When `stop_reason === 'tool_use'`, execute the tool (`window.toggleTheme?.()`)
+- Append the assistant tool-call turn and a `tool_result` turn to messages
+- Call the API again to get the model's confirmation — this cycle is the agent loop
 
 **SDK Reference**: [Tool use](https://docs.anthropic.com/en/docs/tool-use)
-
-### Task 5: Prompt Engineering Test
-
-Open `Chat.test.ts` and implement the tests:
-
-- Each test calls the API directly (no React)
-- Use `temperature: 0` for maximum determinism
-- Assert on the response content or structure
-- Run with `npm run test`
-
-**Tips**:
-
-- These tests make real API calls (~$0.001 each with Haiku)
-- `tool_use` with `tool_choice` is more reliable than asking for JSON in prose
-- XML tags (`<input>`, `<examples>`) help Claude parse complex prompts
 
 ## Verification
 
 Once all tasks are complete:
 
-1. Run `npm run dev` — chat should work with real responses
-2. Toggle streaming on — text should appear incrementally
-3. Run `npm run test` — all prompt tests pass
+1. Chat responds to messages
+2. Conversation history is preserved across turns
+3. Streaming toggle shows text appearing word by word
+4. System prompt textarea shapes the model's responses
+5. Asking to "switch theme" toggles light/dark mode and the model confirms
 
 ## Solution
 
-If you get stuck, check `Chat.solution.tsx` and `Chat.test.solution.ts` for the complete implementation.
+If you get stuck, check `Chat.solution.tsx` for the complete implementation.

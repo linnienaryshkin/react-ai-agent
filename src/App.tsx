@@ -1,21 +1,25 @@
-import { useState } from 'react';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import Box from '@mui/material/Box';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Toolbar from '@mui/material/Toolbar';
 import AppBar from '@mui/material/AppBar';
 import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Chat as ChatExercise } from './katas/kata-01-basic-chat/Chat';
 import { Chat as ChatSolution } from './katas/kata-01-basic-chat/Chat.solution';
 
-function Layout() {
+interface LayoutProps {
+  mode: 'light' | 'dark';
+  onToggleTheme: () => void;
+}
+
+function Layout({ mode, onToggleTheme }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const tab = location.pathname === '/solution' ? 1 : 0;
-
-  const [solutionMessages, setSolutionMessages] = useState<MessageParam[]>([]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -33,6 +37,10 @@ function Layout() {
             <Tab label="Exercise" />
             <Tab label="Solution" />
           </Tabs>
+          <Box sx={{ flexGrow: 1 }} />
+          <IconButton color="inherit" onClick={onToggleTheme} aria-label="toggle theme">
+            {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+          </IconButton>
         </Toolbar>
       </AppBar>
 
@@ -40,20 +48,22 @@ function Layout() {
       <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
         <Routes>
           <Route path="/" element={<ChatExercise />} />
-          <Route
-            path="/solution"
-            element={<ChatSolution messages={solutionMessages} setMessages={setSolutionMessages} />}
-          />
+          <Route path="/solution" element={<ChatSolution />} />
         </Routes>
       </Box>
     </Box>
   );
 }
 
-export default function App() {
+interface AppProps {
+  mode: 'light' | 'dark';
+  onToggleTheme: () => void;
+}
+
+export default function App({ mode, onToggleTheme }: AppProps) {
   return (
     <BrowserRouter>
-      <Layout />
+      <Layout mode={mode} onToggleTheme={onToggleTheme} />
     </BrowserRouter>
   );
 }
