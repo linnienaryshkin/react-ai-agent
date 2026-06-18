@@ -21,7 +21,7 @@ Go to [console.anthropic.com](https://console.anthropic.com) and sign up.
 
 2. Open `.env` and paste your key:
 
-   ```
+   ```sh
    ANTHROPIC_API_KEY=sk-ant-api03-your-actual-key-here
    ```
 

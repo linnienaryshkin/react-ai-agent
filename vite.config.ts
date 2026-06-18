@@ -3,9 +3,15 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  envPrefix: ['VITE_', 'ANTHROPIC_'],
+  envPrefix: ['ANTHROPIC_'],
   server: {
     proxy: {
+      /**
+       * Proxying API requests to avoid CORS issues. The Anthropic API does not allow
+       * cross-origin requests from the browser, so we set up a proxy in Vite's dev server.
+       * This way, we can make requests to /api/anthropic/* and have them forwarded to
+       * https://api.anthropic.com/* without CORS issues.
+       */
       '/api/anthropic': {
         target: 'https://api.anthropic.com',
         changeOrigin: true,

@@ -1,15 +1,59 @@
-import { StrictMode } from 'react';
+import { StrictMode, useState, useCallback, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { theme } from './theme';
+import { makeTheme } from './theme';
 import App from './App';
+
+declare global {
+  interface Window {
+    toggleTheme: () => void;
+  }
+}
+
+function getUrlMode(): 'light' | 'dark' {
+  return new URLSearchParams(window.location.search).get('theme') === 'light' ? 'light' : 'dark';
+}
+
+function setUrlMode(mode: 'light' | 'dark') {
+  const url = new URL(window.location.href);
+  url.searchParams.set('theme', mode);
+  window.history.replaceState(null, '', url);
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+function Root() {
+  const [mode, setMode] = useState<'light' | 'dark'>(getUrlMode);
+
+  const toggle = useCallback(() => {
+    setMode((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      setUrlMode(next);
+      return next;
+    });
+  }, []);
+
+  // Keep in sync if the user edits the URL manually (back/forward navigation).
+  useEffect(() => {
+    const handler = () => setMode(getUrlMode());
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  useEffect(() => {
+    window.toggleTheme = toggle;
+  }, [toggle]);
+
+  return (
+    <ThemeProvider theme={makeTheme(mode)}>
+      <CssBaseline />
+      <App mode={mode} onToggleTheme={toggle} />
+    </ThemeProvider>
+  );
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <App />
-    </ThemeProvider>
+    <Root />
   </StrictMode>,
 );
