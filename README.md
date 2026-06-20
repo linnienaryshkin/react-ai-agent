@@ -1,14 +1,14 @@
 # React AI Agent
 
-Hands-on coding exercises for learning the Anthropic API and building agentic systems — in a running React app, in your browser, right now.
+Hands-on coding exercises for learning the Anthropic API and building agentic systems — in a running React app, in your browser.
 
-No toy scripts. Every kata is a real UI where you write the API code and immediately see it work.
+Every kata is a real UI where you write the API code and immediately see it work.
 
 ## Who this is for
 
 - **React engineers** who want to understand how the Anthropic API actually works — streaming, context, tool use — using patterns they already know
 - **Agent builders** who want hands-on experience with agentic loops, tool design, and orchestration in a friendly JS environment
-- **Certification candidates** preparing for the Anthropic Architect Certification and want to cover the exam domains through practice, not memorization
+- **Certification candidates** preparing for the Anthropic Architect Certification and want to cover the exam domains through practice, not just memorization
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ Each kata opens side-by-side: your workspace on the left, the reference solution
 
 | # | Name | What you build |
 |---|------|----------------|
-| 1 | **Basic Chat** | A working chat UI — API client, streaming, context management, and a tool-use agent loop |
+| 1 | **Basic Chat** | A working chat UI — API client, context management, and a tool-use agent loop |
 
 ## Scripts
 
