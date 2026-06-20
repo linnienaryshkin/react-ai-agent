@@ -1,4 +1,4 @@
-# AI Kata
+# React AI Agent
 
 Hands-on coding exercises for learning the Anthropic API and building agentic systems — in a running React app, in your browser, right now.
 
