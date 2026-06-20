@@ -46,8 +46,7 @@ export function makeTheme(mode: 'light' | 'dark') {
     },
 
     typography: {
-      fontFamily:
-        '"Inter", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontFamily: '"Inter", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       h6: {
         fontWeight: 700,
         letterSpacing: '-0.01em',
@@ -188,4 +187,3 @@ export function makeTheme(mode: 'light' | 'dark') {
     },
   });
 }
-

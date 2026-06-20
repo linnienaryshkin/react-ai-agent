@@ -29,17 +29,17 @@ This is a React + TypeScript + Vite app that serves as a hands-on learning curri
 
 ## Kata Curriculum
 
-Only Kata 1 (Basic Chat) is implemented. It covers five tasks in order:
+Only Kata 1 (Basic Chat) is implemented. It covers three tasks in order:
 
 1. Send a message to the Anthropic API
 2. Context management — stateless API, full history in every request
-3. Streaming — `messages.stream()`, SSE, `text` events
-4. System message — `system` field, persistent instructions
-5. Tool use — agent loop, `set_theme` tool, `stop_reason: 'tool_use'`
+3. Tool use — agent loop, `set_theme` tool, `stop_reason: 'tool_use'`
 
-New katas should follow the existing file/folder conventions. See `docs/CURRICULUM_ROADMAP.md` for the planned domains:
+New katas should follow the existing file/folder conventions and target these certification domains:
 
 - Domain 1: Agentic Architecture & Orchestration
 - Domain 2: Tool Design & MCP Integration
 - Domain 4: Prompt Engineering & Structured Output
 - Domain 5: Context Management & Reliability
+
+`docs/ANTHROPIC_API.md` covers key API concepts (stateless multi-turn, tool definitions, agent loop). `docs/MODELS.md` lists current Claude model IDs and pricing.

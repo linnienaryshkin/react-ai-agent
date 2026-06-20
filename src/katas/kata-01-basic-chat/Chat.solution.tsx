@@ -69,7 +69,13 @@ export function Chat() {
 
           history.push({
             role: 'user',
-            content: [{ type: 'tool_result' as const, tool_use_id: toolUseBlock.id, content: 'Theme toggled.' }],
+            content: [
+              {
+                type: 'tool_result' as const,
+                tool_use_id: toolUseBlock.id,
+                content: 'Theme toggled.',
+              },
+            ],
           });
           setMessages([...history]);
 

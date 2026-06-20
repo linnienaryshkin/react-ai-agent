@@ -48,7 +48,7 @@ Let the model take real actions. You'll wire up a `set_theme` tool that toggles 
 - Append the assistant tool-call turn and a `tool_result` turn to `history`
 - Call the API again to get the model's confirmation — this is the agent loop
 
-Try asking: *"switch to dark mode"* and watch the model decide to use the tool.
+Try asking: _"switch to dark mode"_ and watch the model decide to use the tool.
 
 **SDK reference**: [Tool use](https://docs.anthropic.com/en/docs/tool-use)
 
