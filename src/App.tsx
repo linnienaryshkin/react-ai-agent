@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
+import PrintIcon from '@mui/icons-material/Print';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Chat as ChatExercise } from './katas/kata-01-basic-chat/Chat';
 import { Chat as ChatSolution } from './katas/kata-01-basic-chat/Chat.solution';
@@ -38,6 +39,9 @@ function Layout({ mode, onToggleTheme }: LayoutProps) {
             <Tab label="Solution" />
           </Tabs>
           <Box sx={{ flexGrow: 1 }} />
+          <IconButton color="inherit" onClick={() => window.print()} aria-label="print conversation">
+            <PrintIcon />
+          </IconButton>
           <IconButton color="inherit" onClick={onToggleTheme} aria-label="toggle theme">
             {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
           </IconButton>

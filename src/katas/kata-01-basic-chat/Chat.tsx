@@ -52,6 +52,16 @@ export function Chat() {
       //
       // Your code here...
       // ───────────────────────────────────────────────────────────────────────
+
+      // ───────────────────────────────────────────────────────────────────────
+      // TASK 4: Second tool — print conversation
+      // Add a print_conversation tool alongside set_theme. When the model calls
+      // it, invoke window.print() to open the browser print dialog.
+      // The model may call both tools in one response — collect ALL tool_use blocks
+      // and return a tool_result for each in a single user turn, or the API errors.
+      //
+      // Your code here...
+      // ───────────────────────────────────────────────────────────────────────
     } finally {
       setLoading(false);
     }

@@ -48,35 +48,45 @@ export function Chat() {
         input_schema: { type: 'object' as const, properties: {}, required: [] },
       };
 
+      const PRINT_TOOL: Anthropic.Tool = {
+        name: 'print_conversation',
+        description:
+          'Print the current conversation using the browser print dialog. ' +
+          'Call this when the user asks to print, save, or export the chat.',
+        input_schema: { type: 'object' as const, properties: {}, required: [] },
+      };
+
       // response.content is an array of blocks (text, tool_use, etc.).
       // response.stop_reason signals why the model stopped: 'end_turn' for a
       // normal reply, 'tool_use' when it wants to call a tool.
       const response = await client.messages.create({
         model: 'claude-haiku-4-5',
         max_tokens: 1024,
-        tools: [SET_THEME_TOOL],
+        tools: [SET_THEME_TOOL, PRINT_TOOL],
         messages: history,
       });
       history.push({ role: 'assistant', content: response.content });
       setMessages([...history]);
 
       if (response.stop_reason === 'tool_use') {
-        // A response can contain multiple blocks — e.g. text followed by a
-        // tool_use block. We find the tool_use block to get its id and input.
-        const toolUseBlock = response.content.find((b) => b.type === 'tool_use');
-        if (toolUseBlock && toolUseBlock.type === 'tool_use') {
-          window.toggleTheme?.();
+        // A response can contain multiple tool_use blocks — every one must get
+        // a corresponding tool_result in the next user turn or the API errors.
+        const toolUseBlocks = response.content.filter((b) => b.type === 'tool_use');
+        const toolResults = toolUseBlocks.map((block) => {
+          if (block.type !== 'tool_use') return null;
+          let content = '';
+          if (block.name === 'set_theme') {
+            window.toggleTheme?.();
+            content = 'Theme toggled.';
+          } else if (block.name === 'print_conversation') {
+            window.print();
+            content = 'Print dialog opened.';
+          }
+          return { type: 'tool_result' as const, tool_use_id: block.id, content };
+        }).filter(Boolean) as { type: 'tool_result'; tool_use_id: string; content: string }[];
 
-          history.push({
-            role: 'user',
-            content: [
-              {
-                type: 'tool_result' as const,
-                tool_use_id: toolUseBlock.id,
-                content: 'Theme toggled.',
-              },
-            ],
-          });
+        if (toolResults.length > 0) {
+          history.push({ role: 'user', content: toolResults });
           setMessages([...history]);
 
           // After executing the tool, send the result back so the model can
@@ -84,7 +94,7 @@ export function Chat() {
           const followUp = await client.messages.create({
             model: 'claude-haiku-4-5',
             max_tokens: 1024,
-            tools: [SET_THEME_TOOL],
+            tools: [SET_THEME_TOOL, PRINT_TOOL],
             messages: history,
           });
 

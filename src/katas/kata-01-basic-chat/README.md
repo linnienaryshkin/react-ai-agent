@@ -52,6 +52,19 @@ Try asking: _"switch to dark mode"_ and watch the model decide to use the tool.
 
 **SDK reference**: [Tool use](https://docs.anthropic.com/en/docs/tool-use)
 
+### Task 4: Second tool — print conversation
+
+Extend the agent with a second tool that opens the browser print dialog:
+
+- Define a `print_conversation` tool with an empty `input_schema` (no parameters)
+- Pass both tools in every API call: `tools: [SET_THEME_TOOL, PRINT_TOOL]`
+- Dispatch on `toolUseBlock.name` to call the right side effect — `window.toggleTheme?.()` for `set_theme`, `window.printConversation?.()` for `print_conversation`
+- Return an appropriate `tool_result` string for each tool
+
+Try asking: _"please print this conversation"_ and watch the model trigger the print dialog.
+
+**SDK reference**: [Multiple tools](https://docs.anthropic.com/en/docs/tool-use#multiple-tools)
+
 ---
 
 ## Verification checklist
@@ -59,3 +72,4 @@ Try asking: _"switch to dark mode"_ and watch the model decide to use the tool.
 - [ ] Chat responds to messages
 - [ ] Conversation history is preserved across turns
 - [ ] Asking to "switch theme" toggles light/dark mode and the model confirms it did
+- [ ] Asking to "print" opens the browser print dialog and the model confirms it did
