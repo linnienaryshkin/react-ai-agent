@@ -1,165 +1,268 @@
-# Anthropic API Concepts
+# Anthropic API Request Flow
 
-A practical reference for the concepts behind the katas. Read top to bottom once, then use as a reference while coding.
+- [Anthropic API Request Flow](#anthropic-api-request-flow)
+  - [API Request](#api-request)
+  - [Tokenization](#tokenization)
+  - [Embedding](#embedding)
+  - [Contextualization](#contextualization)
+  - [Generation](#generation)
+  - [API Response](#api-response)
+  - [References](#references)
 
----
+## API Request
 
-## max_tokens
+The client sends a request to the Anthropic API. Requests can be made via the SDK or a plain HTTP call. Input text is placed inside a `"user"` message within the `messages` array.
 
-`max_tokens` sets a hard cap on how many tokens the model can generate in a single response. The model stops as soon as it hits the limit — mid-sentence if needed.
+```mermaid
+flowchart LR
+    subgraph note["Request shape"]
+        direction TB
+        n1["Requests can be made through\nan SDK or plain HTTP request"]
+        n2["Input text is placed inside a\n'user' message, which is then\nplaced in a list of messages"]
+    end
 
-```ts
-client.messages.create({
-  model: 'claude-haiku-4-5',
-  max_tokens: 1024, // required — there is no default
-  messages: [...],
-})
+    subgraph fields["Request fields"]
+        direction TB
+        f1["API Key — Identifies your request to Anthropic"]
+        f2["Model — Name of the model to use"]
+        f3["Messages — List of messages containing the user's input text"]
+        f4["Max Tokens — Limit to how many tokens the model can generate"]
+    end
+
+    api["Anthropic\nAPI"]
+
+    note --> fields --> api
+
+    style note fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style api fill:#e8d5c4,stroke:#c9b99a,color:#000
+    style n1 fill:#fff,stroke:#c9b99a,color:#000
+    style n2 fill:#fff,stroke:#c9b99a,color:#000
+    style f1 fill:#fff,stroke:#c9b99a,color:#000
+    style f2 fill:#fff,stroke:#c9b99a,color:#000
+    style f3 fill:#fff,stroke:#c9b99a,color:#000
+    style f4 fill:#fff,stroke:#c9b99a,color:#000
 ```
 
-A token is roughly 0.75 words. `1024` tokens ≈ 750 words — enough for most conversational replies. For tasks that produce long output (code, essays, structured data), set it higher.
+**Pipeline:** `Request to Server` → **`Request to Anthropic API`** → `Model Processing` → `Response to Server` → `Response to Client`
 
-**Why it's required** — unlike some APIs, the Anthropic SDK has no default. You always declare intent upfront.
+## Tokenization
 
----
+The model first breaks the input text into tokens — sub-word units it can process numerically. Each token can carry multiple possible meanings, which are resolved in the embedding step.
 
-## Multi-Turn Conversations
+```mermaid
+flowchart LR
+    subgraph pipeline["Anthropic API — Model Processing"]
+        direction TB
+        t1["Tokenization"]
+        t2["Embedding"]
+        t3["Contextualization"]
+        t4["Generation"]
+        t1 --> t2 --> t3 --> t4
+    end
 
-The API is **stateless** — it has no memory between calls. Every request is independent. To have a conversation, you maintain a `history` array yourself and pass the full thing on every call.
+    subgraph tokenize["User Input → Tokens"]
+        direction TB
+        input["What is quantum computing?"]
+        input --> tok1["What"]
+        input --> tok2["is"]
+        input --> tok3["quantum"]
+        input --> tok4["computing"]
+        input --> tok5["?"]
+        tok3 --> q1["physics unit"]
+        tok3 --> q2["quantum mechanics"]
+        tok3 --> q3["quantum computing"]
+    end
 
-```ts
-const history: MessageParam[] = [];
+    pipeline --> tokenize
 
-// User sends a message
-history.push({ role: 'user', content: 'Hello!' });
-
-const response = await client.messages.create({
-  model: 'claude-haiku-4-5',
-  max_tokens: 1024,
-  messages: history, // full history every time
-});
-
-// Append the reply so it's included in the next call
-history.push({ role: 'assistant', content: response.content });
+    style t1 fill:#c9b99a,color:#000,stroke:#a08060,font-weight:bold
+    style t2 fill:#fff,color:#000,stroke:#c9b99a
+    style t3 fill:#fff,color:#000,stroke:#c9b99a
+    style t4 fill:#fff,color:#000,stroke:#c9b99a
+    style pipeline fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style input fill:#fff,stroke:#c9b99a,color:#000
+    style tok1 fill:#fff,stroke:#c9b99a,color:#000
+    style tok2 fill:#fff,stroke:#c9b99a,color:#000
+    style tok3 fill:#c9b99a,stroke:#a08060,color:#000
+    style tok4 fill:#fff,stroke:#c9b99a,color:#000
+    style tok5 fill:#fff,stroke:#c9b99a,color:#000
+    style q1 fill:#fff,stroke:#c9b99a,color:#000
+    style q2 fill:#fff,stroke:#c9b99a,color:#000
+    style q3 fill:#fff,stroke:#c9b99a,color:#000
 ```
 
-Roles strictly alternate: `user`, `assistant`, `user`, `assistant`, … The API rejects requests where two consecutive messages share the same role.
+**Pipeline:** `Request to Server` → `Request to Anthropic API` → **`Model Processing`** → `Response to Server` → `Response to Client`
 
-**Why stateless?** — it makes the API simple, scalable, and transparent. You own the context, so you can summarize it, truncate it, or inject information at any point.
+## Embedding
 
----
+Each token is converted into a high-dimensional numeric vector. The full sentence becomes a matrix of vectors — one per token — that the model can compute over.
 
-## Tool Functions
+```mermaid
+flowchart LR
+    subgraph pipeline["Anthropic API — Model Processing"]
+        direction TB
+        t1["Tokenization"]
+        t2["Embedding"]
+        t3["Contextualization"]
+        t4["Generation"]
+        t1 --> t2 --> t3 --> t4
+    end
 
-Tools let the model take actions — call an API, read a file, update the UI. You define what tools are available; the model decides when to call them.
+    subgraph embeddings["Tokens → Embedding Vectors"]
+        direction LR
+        tok1["What"] --> e1["−0.34\n0.87\n0.15\n0.59\n−0.61"]
+        tok2["is"] --> e2["−0.11\n0.83\n0.37\n0.64\n−0.48"]
+        tok3["quantum"] --> e3["0.27\n−0.94\n−0.16\n0.88\n0.09"]
+        tok4["computing"] --> e4["−0.02\n0.77\n0.29\n0.54\n−0.98"]
+        tok5["?"] --> e5["0.35\n−0.86\n−0.21\n0.97\n0.04"]
+    end
 
-A tool definition has three parts:
+    pipeline --> embeddings
 
-```ts
-const MY_TOOL: Anthropic.Tool = {
-  name: 'set_theme',                          // identifier the model uses to call it
-  description:
-    'Toggle the app color theme between light and dark mode. ' +
-    'Call this when the user asks to switch, change, or toggle the theme.',
-  input_schema: {                             // JSON Schema for the tool's parameters
-    type: 'object',
-    properties: {
-      // define parameters here, or leave empty if the tool takes none
-    },
-    required: [],
-  },
-};
+    style t2 fill:#c9b99a,color:#000,stroke:#a08060,font-weight:bold
+    style t1 fill:#fff,color:#000,stroke:#c9b99a
+    style t3 fill:#fff,color:#000,stroke:#c9b99a
+    style t4 fill:#fff,color:#000,stroke:#c9b99a
+    style pipeline fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style tok1 fill:#fff,stroke:#c9b99a,color:#000
+    style tok2 fill:#fff,stroke:#c9b99a,color:#000
+    style tok3 fill:#fff,stroke:#c9b99a,color:#000
+    style tok4 fill:#fff,stroke:#c9b99a,color:#000
+    style tok5 fill:#fff,stroke:#c9b99a,color:#000
+    style e1 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e2 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e3 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e4 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e5 fill:#f5f0eb,stroke:#c9b99a,color:#000
 ```
 
-Pass tools in every request:
+**Pipeline:** `Request to Server` → `Request to Anthropic API` → **`Model Processing`** → `Response to Server` → `Response to Client`
 
-```ts
-client.messages.create({
-  model: 'claude-haiku-4-5',
-  max_tokens: 1024,
-  tools: [MY_TOOL],
-  messages: history,
-});
+## Contextualization
+
+The model uses attention to let every token look at every other token's embedding. This resolves ambiguity — the meaning of "quantum" shifts depending on surrounding words like "computing" or "mechanics."
+
+```mermaid
+flowchart LR
+    subgraph pipeline["Anthropic API — Model Processing"]
+        direction TB
+        t1["Tokenization"]
+        t2["Embedding"]
+        t3["Contextualization"]
+        t4["Generation"]
+        t1 --> t2 --> t3 --> t4
+    end
+
+    subgraph ctx["Embeddings"]
+        direction LR
+        e1["−0.34\n0.87\n−0.02\n0.15\n0.59\n−0.61\n−0.08"]
+        e2["−0.11\n0.83\n−0.99\n0.37\n0.64\n−0.48\n0.75"]
+        e3["0.27\n−0.94\n0.42\n−0.16\n0.88\n0.09\n0.55"]
+        e4["−0.02\n0.77\n−0.63\n0.29\n0.54\n−0.98\n0.85"]
+        e5["0.35\n−0.86\n0.50\n−0.21\n0.97\n0.04\n0.62"]
+        e1 <--> e2
+        e1 <--> e3
+        e1 <--> e4
+        e1 <--> e5
+        e2 <--> e3
+        e2 <--> e4
+        e2 <--> e5
+        e3 <--> e4
+        e3 <--> e5
+        e4 <--> e5
+    end
+
+    pipeline --> ctx
+
+    style t3 fill:#c9b99a,color:#000,stroke:#a08060,font-weight:bold
+    style t1 fill:#fff,color:#000,stroke:#c9b99a
+    style t2 fill:#fff,color:#000,stroke:#c9b99a
+    style t4 fill:#fff,color:#000,stroke:#c9b99a
+    style pipeline fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e1 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e2 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e3 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e4 fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style e5 fill:#f5f0eb,stroke:#c9b99a,color:#000
 ```
 
-**Writing good descriptions** — the description is the model's only guide for when and how to use the tool. Be explicit about the trigger condition ("call this when the user asks to…"). Vague descriptions lead to missed calls or wrong calls.
+**Pipeline:** `Request to Server` → `Request to Anthropic API` → **`Model Processing`** → `Response to Server` → `Response to Client`
 
----
+## Generation
 
-## The Agent Loop
+The model generates output tokens one at a time. After each token, it checks whether it should stop.
 
-When the model wants to use a tool, it doesn't execute it — it asks you to. Your code runs the tool and reports the result back. The model then produces its final reply. This request → execute → respond cycle is the **agent loop**.
+```mermaid
+flowchart LR
+    subgraph pipeline["Anthropic API — Model Processing"]
+        direction TB
+        t1["Tokenization"]
+        t2["Embedding"]
+        t3["Contextualization"]
+        t4["Generation"]
+        t1 --> t2 --> t3 --> t4
+    end
 
-`stop_reason` tells you why the model stopped generating:
+    subgraph gen["Output token stream"]
+        direction TB
+        stream["Quantum → mechanics → is → a → form → of → computing. → EOS"]
+        stream --> check{"Next token\ngenerated"}
+        check --> q1{"Exceeded\nmax_tokens?"}
+        check --> q2{"Stop sequence\ntoken?"}
+        check --> q3{"End of Sequence\ntoken?"}
+        q1 -->|Yes| stop["Stop — return response"]
+        q2 -->|Yes| stop
+        q3 -->|Yes| stop
+        q1 -->|No| check
+        q2 -->|No| check
+        q3 -->|No| check
+    end
 
-| `stop_reason` | Meaning |
-|---------------|---------|
-| `'end_turn'` | Normal reply, nothing to do |
-| `'tool_use'` | Model wants to call a tool — your code must handle it |
-| `'max_tokens'` | Hit the token limit mid-response |
+    pipeline --> gen
 
-```ts
-const response = await client.messages.create({ ... });
-
-if (response.stop_reason === 'tool_use') {
-  // 1. Find the tool_use block in the response
-  const toolCall = response.content.find(b => b.type === 'tool_use');
-
-  // 2. Execute the tool
-  window.toggleTheme?.();
-
-  // 3. Append the assistant's turn (which contains the tool call)
-  history.push({ role: 'assistant', content: response.content });
-
-  // 4. Append the tool result as a user turn
-  history.push({
-    role: 'user',
-    content: [{ type: 'tool_result', tool_use_id: toolCall.id, content: 'Theme toggled.' }],
-  });
-
-  // 5. Call the API again — model produces its final reply
-  const followUp = await client.messages.create({ ..., messages: history });
-  history.push({ role: 'assistant', content: followUp.content });
-}
+    style t4 fill:#c9b99a,color:#000,stroke:#a08060,font-weight:bold
+    style t1 fill:#fff,color:#000,stroke:#c9b99a
+    style t2 fill:#fff,color:#000,stroke:#c9b99a
+    style t3 fill:#fff,color:#000,stroke:#c9b99a
+    style pipeline fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style stream fill:#fff,stroke:#c9b99a,color:#000
+    style check fill:#fff,stroke:#c9b99a,color:#000
+    style q1 fill:#fff,stroke:#c9b99a,color:#000
+    style q2 fill:#fff,stroke:#c9b99a,color:#000
+    style q3 fill:#fff,stroke:#c9b99a,color:#000
+    style stop fill:#e8d5c4,stroke:#c9b99a,color:#000
 ```
 
-The loop can repeat — if the follow-up response also has `stop_reason === 'tool_use'`, you handle it again. In production agents, this runs until `stop_reason === 'end_turn'`.
+**Pipeline:** `Request to Server` → `Request to Anthropic API` → **`Model Processing`** → `Response to Server` → `Response to Client`
 
----
+## API Response
 
-## Content Blocks
+The API returns a response. The output text is placed into an `"assistant"` message.
 
-`response.content` is always an **array of blocks**, never a plain string. A single response can contain multiple blocks of different types.
+```mermaid
+flowchart LR
+    api["Anthropic API"]
 
-```ts
-// A response might look like:
-response.content = [
-  { type: 'text', text: 'Sure, I'll switch the theme for you.' },
-  { type: 'tool_use', id: 'toolu_01...', name: 'set_theme', input: {} },
-]
+    subgraph fields["Response fields"]
+        direction TB
+        f1["Message — Single message containing the generated text"]
+        f2["Usage — Number of input + output tokens"]
+        f3["Stop Reason — Why the model stopped generation"]
+    end
+
+    note["Output text placed into an 'assistant' message"]
+
+    api --> fields --> note
+
+    style api fill:#e8d5c4,stroke:#c9b99a,color:#000
+    style note fill:#f5f0eb,stroke:#c9b99a,color:#000
+    style f1 fill:#fff,stroke:#c9b99a,color:#000
+    style f2 fill:#fff,stroke:#c9b99a,color:#000
+    style f3 fill:#fff,stroke:#c9b99a,color:#000
 ```
 
-Common block types:
+**Pipeline:** `Request to Server` → `Request to Anthropic API` → `Model Processing` → **`Response to Server`** → `Response to Client`
 
-| Type | When it appears |
-|------|-----------------|
-| `text` | Any normal reply |
-| `tool_use` | Model is calling a tool (`stop_reason === 'tool_use'`) |
-| `tool_result` | Your code reporting back the result of a tool call (you construct this) |
+## References
 
-When rendering messages, always iterate over blocks — never assume `content` is a string:
-
-```ts
-for (const block of response.content) {
-  if (block.type === 'text') {
-    console.log(block.text);
-  } else if (block.type === 'tool_use') {
-    console.log(`Tool called: ${block.name}`, block.input);
-  }
-}
-```
-
-A response can include multiple `tool_use` blocks if the model decides to call several tools in one turn. Handle all of them before sending back results.
-
----
-
-**SDK reference**: [Messages API](https://docs.anthropic.com/en/api/messages) · [Tool use](https://docs.anthropic.com/en/docs/tool-use) · [Models](https://docs.anthropic.com/en/docs/about-claude/models)
+- [Accessing the API](https://anthropic.skilljar.com/claude-with-the-anthropic-api/287726)
