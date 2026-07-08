@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
+import type { MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
@@ -11,14 +11,16 @@ import SendIcon from '@mui/icons-material/Send';
 const client = new Anthropic({
   apiKey: import.meta.env.ANTHROPIC_API_KEY,
 
-  // Vite dev-server proxy (vite.config.ts) forwards this to api.anthropic.com,
-  // bypassing the browser CORS block. Requires an absolute URL.
+  /**
+   * Vite dev-server proxy (vite.config.ts) forwards this to api.anthropic.com,
+   * bypassing the browser CORS block. Requires an absolute URL.
+   */
   baseURL: `${window.location.origin}/api/anthropic`,
 
-  // Required in browser contexts — safe here since this is a local dev environment.
+  /** Required in browser contexts — safe here since this is a local dev environment. */
   dangerouslyAllowBrowser: true,
 });
-// ─────────────────────────────────────────────────────────────────────────────
+/** ─────────────────────────────────────────────────────────────────────────── */
 
 export function Chat() {
   const [messages, setMessages] = useState<MessageParam[]>([]);
@@ -31,15 +33,19 @@ export function Chat() {
 
       if (!userMessage.content || loading) return;
 
-      // The API is stateless — every request must include the full conversation
-      // history so the model knows what was said before.
+      /**
+       * The API is stateless — every request must include the full conversation
+       * history so the model knows what was said before.
+       */
       const history: MessageParam[] = [...messages, userMessage];
       setMessages(history);
       setInput('');
       setLoading(true);
 
-      // Tools are declared in the request; the model decides when to call them.
-      // The input_schema describes the tool's parameters (none here).
+      /**
+       * Tools are declared in the request; the model decides when to call them.
+       * The input_schema describes the tool's parameters (none here).
+       */
       const SET_THEME_TOOL: Anthropic.Tool = {
         name: 'set_theme',
         description:
@@ -56,9 +62,11 @@ export function Chat() {
         input_schema: { type: 'object' as const, properties: {}, required: [] },
       };
 
-      // response.content is an array of blocks (text, tool_use, etc.).
-      // response.stop_reason signals why the model stopped: 'end_turn' for a
-      // normal reply, 'tool_use' when it wants to call a tool.
+      /**
+       * response.content is an array of blocks (text, tool_use, etc.).
+       * response.stop_reason signals why the model stopped: 'end_turn' for a
+       * normal reply, 'tool_use' when it wants to call a tool.
+       */
       const response = await client.messages.create({
         model: 'claude-haiku-4-5',
         max_tokens: 1024,
@@ -69,8 +77,10 @@ export function Chat() {
       setMessages([...history]);
 
       if (response.stop_reason === 'tool_use') {
-        // A response can contain multiple tool_use blocks — every one must get
-        // a corresponding tool_result in the next user turn or the API errors.
+        /**
+         * A response can contain multiple tool_use blocks — every one must get
+         * a corresponding tool_result in the next user turn or the API errors.
+         */
         const toolUseBlocks = response.content.filter((b) => b.type === 'tool_use');
         const toolResults = toolUseBlocks.map((block) => {
           if (block.type !== 'tool_use') return null;
@@ -83,14 +93,16 @@ export function Chat() {
             content = 'Print dialog opened.';
           }
           return { type: 'tool_result' as const, tool_use_id: block.id, content };
-        }).filter(Boolean) as { type: 'tool_result'; tool_use_id: string; content: string }[];
+        }).filter(Boolean) as ToolResultBlockParam[];
 
         if (toolResults.length > 0) {
           history.push({ role: 'user', content: toolResults });
           setMessages([...history]);
 
-          // After executing the tool, send the result back so the model can
-          // produce its final reply — this request/execute/respond cycle is the agent loop.
+          /**
+           * After executing the tool, send the result back so the model can
+           * produce its final reply — this request/execute/respond cycle is the agent loop.
+           */
           const followUp = await client.messages.create({
             model: 'claude-haiku-4-5',
             max_tokens: 1024,
@@ -121,7 +133,7 @@ export function Chat() {
           </Typography>
         );
       }
-      // All non-text block types: render type label + JSON payload.
+      /** All non-text block types: render type label + JSON payload. */
       const { type, ...rest } = block as unknown as { type: string; [k: string]: unknown };
       return (
         <Box key={i} sx={{ fontFamily: 'monospace', fontSize: 12, opacity: 0.85 }}>
@@ -164,7 +176,7 @@ export function Chat() {
           placeholder="Type a message..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          // Shift+Enter inserts a newline in the TextField; plain Enter sends.
+          /** Shift+Enter inserts a newline in the TextField; plain Enter sends. */
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
           disabled={loading}
         />

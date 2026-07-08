@@ -8,17 +8,11 @@ import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import SendIcon from '@mui/icons-material/Send';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TASK 1: First message
-// Create an Anthropic client at module scope. Call client.messages.create()
-// inside handleSend, append the assistant reply to messages, and display it.
-//
-// const client = new Anthropic({
-//   apiKey: import.meta.env.ANTHROPIC_API_KEY,
-//   baseURL: `${window.location.origin}/api/anthropic`,
-//   dangerouslyAllowBrowser: true,
-// });
-// ─────────────────────────────────────────────────────────────────────────────
+//  const client = new Anthropic({
+//    apiKey: import.meta.env.ANTHROPIC_API_KEY,
+//    baseURL: `${window.location.origin}/api/anthropic`,
+//    dangerouslyAllowBrowser: true,
+//  });
 
 export function Chat() {
   const [messages, setMessages] = useState<MessageParam[]>([]);
@@ -31,37 +25,48 @@ export function Chat() {
 
       if (!userMessage.content || loading) return;
 
+      /**
+       * ───────────────────────────────────────────────────────────────────────
+       * TASK 1: First message
+       * Send a user message to the Anthropic API and display the reply in the chat.
+       *
+       * Your code here...
+       * ───────────────────────────────────────────────────────────────────────
+       */
+
       const history: MessageParam[] = [...messages, userMessage];
       setMessages(history);
       setInput('');
       setLoading(true);
 
-      // ───────────────────────────────────────────────────────────────────────
-      // TASK 2: Context management
-      // The API is stateless — pass the full history on every request so the
-      // model knows what was said before. Append the assistant reply to history.
-      //
-      // Your code here...
-      // ───────────────────────────────────────────────────────────────────────
+      /**
+       * ───────────────────────────────────────────────────────────────────────
+       * TASK 2: Context management
+       * Make the model aware of earlier turns so the conversation feels continuous.
+       *
+       * Your code here...
+       * ───────────────────────────────────────────────────────────────────────
+       */
 
-      // ───────────────────────────────────────────────────────────────────────
-      // TASK 3: Tool use — agent loop
-      // Define a set_theme tool and pass it in every request. When stop_reason
-      // is 'tool_use', call window.toggleTheme?.(), send the tool_result turn,
-      // then call the API again to get the model's final reply.
-      //
-      // Your code here...
-      // ───────────────────────────────────────────────────────────────────────
+      /**
+       * ───────────────────────────────────────────────────────────────────────
+       * TASK 3: Tool use — agent loop
+       * Let the model toggle the app theme by calling window.toggleTheme?.().
+       * Give it a tool, run the agent loop, and produce a final reply.
+       *
+       * Your code here...
+       * ───────────────────────────────────────────────────────────────────────
+       */
 
-      // ───────────────────────────────────────────────────────────────────────
-      // TASK 4: Second tool — print conversation
-      // Add a print_conversation tool alongside set_theme. When the model calls
-      // it, invoke window.print() to open the browser print dialog.
-      // The model may call both tools in one response — collect ALL tool_use blocks
-      // and return a tool_result for each in a single user turn, or the API errors.
-      //
-      // Your code here...
-      // ───────────────────────────────────────────────────────────────────────
+      /**
+       * ───────────────────────────────────────────────────────────────────────
+       * TASK 4: Multi-tool response
+       * Add a second tool that prints the conversation via window.print().
+       * The model may call both tools in one response — handle that correctly.
+       *
+       * Your code here...
+       * ───────────────────────────────────────────────────────────────────────
+       */
     } finally {
       setLoading(false);
     }
@@ -81,7 +86,7 @@ export function Chat() {
           </Typography>
         );
       }
-      // All non-text block types: render type label + JSON payload.
+      /** All non-text block types: render type label + JSON payload. */
       const { type, ...rest } = block as unknown as { type: string; [k: string]: unknown };
       return (
         <Box key={i} sx={{ fontFamily: 'monospace', fontSize: 12, opacity: 0.85 }}>
@@ -124,7 +129,7 @@ export function Chat() {
           placeholder="Type a message..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          // Shift+Enter inserts a newline in the TextField; plain Enter sends.
+          /** Shift+Enter inserts a newline in the TextField; plain Enter sends. */
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
           disabled={loading}
         />
