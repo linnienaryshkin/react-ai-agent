@@ -7,7 +7,6 @@
   - [Contextualization](#contextualization)
   - [Generation](#generation)
   - [API Response](#api-response)
-  - [References](#references)
 
 ## API Request
 
@@ -262,7 +261,3 @@ flowchart LR
 ```
 
 **Pipeline:** `Request to Server` → `Request to Anthropic API` → `Model Processing` → **`Response to Server`** → `Response to Client`
-
-## References
-
-- [Accessing the API](https://anthropic.skilljar.com/claude-with-the-anthropic-api/287726)
